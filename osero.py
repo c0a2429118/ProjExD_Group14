@@ -130,7 +130,16 @@ class Board:
 
 # --- ゲーム全体の進行と描画を管理するクラス ---
 class Game:
-    def __init__(self):
+    """
+    オセロゲーム全体の進行と描画、およびセリフ表示を管理するクラス。
+    """
+    def __init__(self)-> None:
+        """
+        Gameクラスのインスタンスを初期化
+        
+        セリフプールやセリフ管理用の変数を決め、
+        ゲーム開始時の最初のセリフを設定する
+        """
         self.board = Board()
         self.current_player = PLAYER_BLACK
         self.game_over = False
@@ -148,15 +157,22 @@ class Game:
 
         #追加セリフ管理
         self.dialogue_text = ""
-        self.dialogue_end_time = 0
-        self.next_chatter_time = 0
-        self.next_chatter_pool = None
+        self.dialogue_end_time: float = 0.0
+        self.next_chatter_time: float = 0.0
+        self.next_chatter_pool: Optional[List[str]] = None
 
         #追加ゲーム開始時最初のセリフ
         self.set_dialogue(random.choice(self.pool1))
 
     #セリフを設定
-    def set_dialogue(self, text):
+    def set_dialogue(self, text: str) -> None: 
+        """
+        表示するセリフを設定し、3秒間の表示タイマーをセット
+
+        現在の雑談タイマーをリセットし、ゲームが終了していなければ
+        新しい雑談になる
+
+        """
         self.dialogue_text = text
         self.dialogue_end_time = time.time() + 3
         self.next_chatter_time = 0
@@ -164,16 +180,23 @@ class Game:
             self.schedule_chatter_task(self.dialogue_end_time)
 
     #追加次の雑談までの時間と内容
-    def schedule_chatter_task(self, start_time):
-        rand_val = random.random()
-        if rand_val < 0.4:
+    def schedule_chatter_task(self, start_time: float) -> None:
+        """
+        次の雑談（独り言）セリフが発動する時間をスケジュールします。
+
+        仕様に基づき、40%の確率で5秒後、30%で7秒後、30%で9秒後に
+        発動するように設定し、使用するセリフプールを選択します。
+        """
+        rand_val: float = random.random()
+        delay: int
+        if rand_val < 0.4:#確率40%
             delay = 5
             self.next_chatter_pool = self.pool2
-        elif rand_val < 0.7:
+        elif rand_val < 0.7:#30%
             delay = 7
             self.next_chatter_pool = self.pool3
         else:
-            delay = 9
+            delay = 9 #30%
             self.next_chatter_pool = self.pool4
         self.next_chatter_time = start_time + delay
 
