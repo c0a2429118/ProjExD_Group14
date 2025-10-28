@@ -26,6 +26,44 @@ try:
 except pygame.error:
     font = pygame.font.Font(None, 28) # こちらも合わせて小さく
 
+def gameover(screen: pygame.Surface) -> None:
+    """
+
+    引数:
+        screen (pg.Surface): 画面(screen)
+    """
+    game_img = pygame.Surface((WIDTH, HEIGHT)) #空のサーフェス
+    pygame.draw.rect(game_img, (0, 0, 0), (0, 0, 1100, 650))# 黒い四角形を作成
+    game_img.set_alpha(255) #黒画面の透明度#フォントを作成
+    txt = font.render("end", True, (255, 255, 255))
+    game_img.blit(txt, [300,320])#文字
+    screen.blit(game_img,[0, 0])
+    pygame.display.update()
+    pygame.time.wait(2000)
+
+class Timer:
+    """
+    時間を測る機能
+    """
+    def __init__(self, font: pygame.font.Font):
+        """
+        タイマーの初期化。開始時刻と使用するフォントを記憶。
+        """
+        self.start_ticks = pygame.time.get_ticks()  # 開始時刻（ミリ秒）
+        self.font = font
+        self.elapsed_time = 0 # 経過時間（秒）
+        self.game_over = False # ゲーム終了フラグ
+
+    def update(self, game_over: bool):
+        """
+        経過時間を更新する。ゲームが終了したら更新を停止。
+        """
+        self.game_over = game_over #ゲームが終わっているか確認
+        if not self.game_over:
+            self.elapsed_time = (pygame.time.get_ticks() - self.start_ticks) // 1000
+        
+        
+
 # --- Othello盤のロジックを管理するクラス ---
 class Board:
     def __init__(self):
@@ -77,6 +115,8 @@ class Board:
 class Game:
     def __init__(self):
         self.board = Board()
+        self.time = Timer(font)
+        
         self.current_player = PLAYER_BLACK
         self.game_over = False
         self.message = "あなたの番です (黒)"
@@ -97,13 +137,15 @@ class Game:
                             self.message = "CPUの番です (白)"
                             self.draw()
                             pygame.display.flip()
-                            self.check_game_flow()
+                        self.check_game_flow()
+                        self.time.update(self.game_over)
 
             if self.current_player == PLAYER_WHITE and not self.game_over:
                 pygame.time.wait(500)
                 self.ai_move()
                 self.check_game_flow()
-            
+                
+            self.time.update(self.game_over)
             self.draw()
             pygame.display.flip()
             clock.tick(30)
@@ -156,6 +198,9 @@ class Game:
         b, w = self.board.count_stones()
         winner = "あなたの勝ち" if b > w else "CPUの勝ち" if w > b else "引き分け"
         self.message = f"ゲーム終了！ {winner} ({b}-{w})"
+        gameover(screen)
+        pygame.quit() 
+        sys.exit()
     
     def draw(self):
         screen.fill(GREEN)
@@ -185,6 +230,13 @@ class Game:
         score_surf = font.render(score_text, True, FONT_COLOR)
         score_rect = score_surf.get_rect(centery=ui_bar_rect.centery, right=WIDTH - 20)
         screen.blit(score_surf, score_rect)
+        
+        timer_x_pos = WIDTH // 2
+        timer_y_pos = ui_bar_rect.centery 
+        time_text = f"Time: {self.time.elapsed_time} s"
+        time_surf = font.render(time_text, True, FONT_COLOR)
+        time_rect = time_surf.get_rect(center=(timer_x_pos, timer_y_pos - 25))
+        screen.blit(time_surf, time_rect)
 
 
 if __name__ == "__main__":
