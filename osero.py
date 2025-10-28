@@ -53,6 +53,17 @@ class Board:
     def get_valid_moves(self, player):
         return [(x, y) for y in range(8) for x in range(8) if self.is_valid_move(x, y, player)]
 
+    def get_valid_moves_positions(self, player):
+        """
+        現在のプレイヤーの全ての合法手の位置を取得する
+        """
+        valid_positions = []
+        for y in range(8):
+            for x in range(8):
+                if self.is_valid_move(x, y, player):
+                    valid_positions.append((x, y))
+        return valid_positions
+    
     def place_stone(self, x, y, player):
         if not self.is_valid_move(x, y, player):
             return
@@ -80,6 +91,7 @@ class Game:
         self.current_player = PLAYER_BLACK
         self.game_over = False
         self.message = "あなたの番です (黒)"
+        self.show_legal_moves = True
 
     def run(self):
         clock = pygame.time.Clock()
@@ -87,6 +99,10 @@ class Game:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit(); sys.exit()
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_h:
+                        self.show_legal_moves = not self.show_legal_moves
                 
                 if self.current_player == PLAYER_BLACK and not self.game_over:
                     if event.type == pygame.MOUSEBUTTONDOWN:
@@ -169,6 +185,20 @@ class Game:
                     color = BLACK if self.board.grid[y][x] == PLAYER_BLACK else WHITE
                     pygame.draw.circle(screen, color, (x*CELL_SIZE+CELL_SIZE//2, y*CELL_SIZE+CELL_SIZE//2), CELL_SIZE//2-4)
 
+        # 合法手のヒントを描画する
+        if self.show_legal_moves and not self.game_over:
+            valid_moves = self.board.get_valid_moves_positions(self.current_player)
+            for x, y in valid_moves:
+                # 半透明のハイライト用サーフェスを作成する
+                highlight_surface = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+                pygame.draw.rect(highlight_surface, (255, 255, 0, 128), (0, 0, CELL_SIZE, CELL_SIZE))
+                screen.blit(highlight_surface, (x * CELL_SIZE, y * CELL_SIZE))
+                
+                # ドットでヒントを描画する
+                dot_x = x * CELL_SIZE + CELL_SIZE // 2
+                dot_y = y * CELL_SIZE + CELL_SIZE // 2
+                dot_color = WHITE if self.current_player == PLAYER_BLACK else BLACK
+                pygame.draw.circle(screen, dot_color, (dot_x, dot_y), 5)
         # ### 修正点②: UIテキストの描画方法を改善 ###
         # 下部UIバーの領域を定義
         ui_bar_rect = pygame.Rect(0, HEIGHT, WIDTH, 80)
@@ -185,6 +215,18 @@ class Game:
         score_surf = font.render(score_text, True, FONT_COLOR)
         score_rect = score_surf.get_rect(centery=ui_bar_rect.centery, right=WIDTH - 20)
         screen.blit(score_surf, score_rect)
+        
+        # Hキーで合法手のヒントの表示/非表示を切り替え
+        legal_status = "合法走法表示: ON" if self.show_legal_moves else "合法走法表示: OFF"
+        legal_surf = font.render(legal_status, True, FONT_COLOR)
+        legal_rect = legal_surf.get_rect(centery=ui_bar_rect.centery + 20, left=20)
+        screen.blit(legal_surf, legal_rect)
+        
+        # 操作ヒント    
+        hint_text = "Hキー: 合法走法表示切替"
+        hint_surf = font.render(hint_text, True, FONT_COLOR)
+        hint_rect = hint_surf.get_rect(centery=ui_bar_rect.centery + 20, right=WIDTH - 20)
+        screen.blit(hint_surf, hint_rect)
 
 
 if __name__ == "__main__":
