@@ -139,8 +139,7 @@ class Game:
                         pygame.mixer.music.play(loops=-1)
                         self.paused = False
                         self.message = "BGM再生開始"
-                    elif event.key == pygame.K_UP:
-                          # Volume up
+                    elif event.key == pygame.K_UP:  # Volume up
                         vol = min(1.0, pygame.mixer.music.get_volume() + 0.05)
                         pygame.mixer.music.set_volume(vol)
                         self.message = f"BGM音量 ↑ {vol:.2f}"
