@@ -344,15 +344,6 @@ class Game:
                         if snd_put:
                             snd_put.play(maxtime=SND_MAX_MS)
 
-                # if self.current_player == PLAYER_BLACK and not self.game_over:
-                #     if event.type == pygame.MOUSEBUTTONDOWN:
-                #         x, y = event.pos[0] // CELL_SIZE, event.pos[1] // CELL_SIZE
-                #         if self.board.is_valid_move(x, y, PLAYER_BLACK):
-                #             self.board.place_stone(x, y, PLAYER_BLACK)
-                #             self.current_player = PLAYER_WHITE
-                #             self.message = "CPUの番です (白)"
-                #             self.draw(); pygame.display.flip()
-                #             self.check_game_flow()
 
             if self.current_player == PLAYER_WHITE and not self.game_over:
                 pygame.time.wait(500)
