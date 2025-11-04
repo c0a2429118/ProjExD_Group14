@@ -3,12 +3,9 @@ import sys
 import time
 import random
 import os
-<<<<<<< HEAD
-=======
 
 # --- 作業ディレクトリをこのファイルの場所に ---
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
->>>>>>> dc81f069b674a0d8959290ff713a8cb8f793ec47
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # --- 定数 ---
@@ -58,7 +55,6 @@ screen = pygame.display.set_mode((TOTAL_WIDTH, HEIGHT + 80))
 pygame.display.set_caption("オセロ (プレイヤー vs CPU)")
 
 try:
-<<<<<<< HEAD
     # ### 修正点①: 文字サイズを小さく変更 ###
     font = pygame.font.SysFont("MSGothic", 28)
 except Exception:
@@ -89,12 +85,6 @@ except Exception as e:
 
 
 # --- Othello盤のロジックを管理するクラス ---
-=======
-    font = pygame.font.SysFont("MS Gothic", 28)
-except pygame.error:
-    font = pygame.font.Font(None, 28)
-
->>>>>>> dc81f069b674a0d8959290ff713a8cb8f793ec47
 class Board:
     def __init__(self):
         self.grid = [[EMPTY] * 8 for _ in range(8)]
@@ -106,7 +96,6 @@ class Board:
     def is_valid_move(self, x, y, player):
         if not (0 <= x < 8 and 0 <= y < 8) or self.grid[y][x] != EMPTY:
             return False
-<<<<<<< HEAD
 
         opponent = PLAYER_WHITE if player == PLAYER_BLACK else PLAYER_BLACK
 
@@ -118,14 +107,6 @@ class Board:
                 while 0 <= nx < 8 and 0 <= ny < 8:
                     nx += dx
                     ny += dy
-=======
-        opponent = PLAYER_WHITE if player == PLAYER_BLACK else PLAYER_BLACK
-        for dx, dy in [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]:
-            nx, ny = x + dx, y + dy
-            if (0 <= nx < 8 and 0 <= ny < 8) and self.grid[ny][nx] == opponent:
-                while 0 <= nx < 8 and 0 <= ny < 8:
-                    nx += dx; ny += dy
->>>>>>> dc81f069b674a0d8959290ff713a8cb8f793ec47
                     if not (0 <= nx < 8 and 0 <= ny < 8) or self.grid[ny][nx] == EMPTY:
                         break
                     if self.grid[ny][nx] == player:
@@ -138,7 +119,6 @@ class Board:
 
     def place_stone(self, x, y, player):
         if not self.is_valid_move(x, y, player):
-<<<<<<< HEAD
             return 0
 
         self.grid[y][x] = player
@@ -150,14 +130,6 @@ class Board:
         for dx, dy in [(-1, -1), (-1, 0), (-1, 1),
                        (0, -1), (0, 1),
                        (1, -1), (1, 0), (1, 1)]:
-=======
-            return
-        self.grid[y][x] = player
-        opponent = PLAYER_WHITE if player == PLAYER_BLACK else PLAYER_BLACK
-
-        flipped_total = 0
-        for dx, dy in [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]:
->>>>>>> dc81f069b674a0d8959290ff713a8cb8f793ec47
             nx, ny = x + dx, y + dy
             stones_to_flip = []
             while (0 <= nx < 8 and 0 <= ny < 8) and self.grid[ny][nx] == opponent:
@@ -169,11 +141,11 @@ class Board:
                 total_flips += len(stones_to_flip)
                 for fx, fy in stones_to_flip:
                     self.grid[fy][fx] = player
-                flipped_total += len(stones_to_flip)
+                #flipped_total += len(stones_to_flip)
 
         # 効果音（スライドの書式：snd.play(maxtime=最大ミリ秒)）
         try:
-            if flipped_total > 0 and snd_put is not None:
+            if total_flips > 0 and snd_put is not None:
                 snd_put.play(maxtime=SND_MAX_MS)
         except Exception as e:
             print(f"[WARN] 効果音再生に失敗: {e}")
@@ -312,7 +284,6 @@ class Game:
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-<<<<<<< HEAD
                     pygame.quit()
                     sys.exit()
 
@@ -339,9 +310,8 @@ class Game:
                                 self.draw()
                                 pygame.display.flip()
                                 self.check_game_flow()
-=======
-                    pygame.mixer.music.stop()
-                    pygame.quit(); sys.exit()
+                    #pygame.mixer.music.stop()
+                    #pygame.quit(); sys.exit()
 
                 # --- 追加：スライドの操作確認に便利なホットキー ---
                 if event.type == pygame.KEYDOWN:
@@ -374,16 +344,15 @@ class Game:
                         if snd_put:
                             snd_put.play(maxtime=SND_MAX_MS)
 
-                if self.current_player == PLAYER_BLACK and not self.game_over:
-                    if event.type == pygame.MOUSEBUTTONDOWN:
-                        x, y = event.pos[0] // CELL_SIZE, event.pos[1] // CELL_SIZE
-                        if self.board.is_valid_move(x, y, PLAYER_BLACK):
-                            self.board.place_stone(x, y, PLAYER_BLACK)
-                            self.current_player = PLAYER_WHITE
-                            self.message = "CPUの番です (白)"
-                            self.draw(); pygame.display.flip()
-                            self.check_game_flow()
->>>>>>> dc81f069b674a0d8959290ff713a8cb8f793ec47
+                # if self.current_player == PLAYER_BLACK and not self.game_over:
+                #     if event.type == pygame.MOUSEBUTTONDOWN:
+                #         x, y = event.pos[0] // CELL_SIZE, event.pos[1] // CELL_SIZE
+                #         if self.board.is_valid_move(x, y, PLAYER_BLACK):
+                #             self.board.place_stone(x, y, PLAYER_BLACK)
+                #             self.current_player = PLAYER_WHITE
+                #             self.message = "CPUの番です (白)"
+                #             self.draw(); pygame.display.flip()
+                #             self.check_game_flow()
 
             if self.current_player == PLAYER_WHITE and not self.game_over:
                 pygame.time.wait(500)
@@ -414,13 +383,9 @@ class Game:
                 if (0 <= nx < 8 and 0 <= ny < 8) and temp_board[ny][nx] == PLAYER_WHITE:
                     flips += len(stones_to_flip)
             if flips > max_flips:
-<<<<<<< HEAD
                 max_flips = flips
                 best_move = move
 
-=======
-                max_flips, best_move = flips, move
->>>>>>> dc81f069b674a0d8959290ff713a8cb8f793ec47
         if best_move:
             self.board.place_stone(best_move[0], best_move[1], PLAYER_WHITE)
         self.current_player = PLAYER_BLACK
@@ -455,25 +420,16 @@ class Game:
         self.set_dialogue(text)
         
         self.message = f"ゲーム終了！ {winner} ({b}-{w})"
-<<<<<<< HEAD
-=======
         try:
             pygame.mixer.music.stop()   # ← スライドの stop
         except Exception:
             pass
->>>>>>> dc81f069b674a0d8959290ff713a8cb8f793ec47
 
     def draw(self):
         screen.fill(GREEN)
         for i in range(9):
-<<<<<<< HEAD
-            pygame.draw.line(screen, BLACK, (i * CELL_SIZE, 0), (i * CELL_SIZE, HEIGHT), 2)
-            pygame.draw.line(screen, BLACK, (0, i * CELL_SIZE), (WIDTH, i * CELL_SIZE), 2)
-
-=======
             pygame.draw.line(screen, BLACK, (i*CELL_SIZE,0), (i*CELL_SIZE,HEIGHT), 2)
             pygame.draw.line(screen, BLACK, (0,i*CELL_SIZE), (WIDTH,i*CELL_SIZE), 2)
->>>>>>> dc81f069b674a0d8959290ff713a8cb8f793ec47
         for y in range(8):
             for x in range(8):
                 if self.board.grid[y][x] != EMPTY:
