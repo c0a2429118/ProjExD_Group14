@@ -3,30 +3,35 @@ import sys
 import time
 import random
 import os
+import math
 
 # --- 作業ディレクトリをこのファイルの場所に ---
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # --- 定数 ---
-#右側幅追加
+#ゲームボード関連
 RIGHT_PANEL_WIDTH = 216
 WIDTH, HEIGHT = 640, 640
-#追加幅計算
 TOTAL_WIDTH = WIDTH + RIGHT_PANEL_WIDTH
 CELL_SIZE = WIDTH // 8
+
+# ### 変更点: ウィンドウサイズの定義をここに集約 ###
+SCREEN_WIDTH = TOTAL_WIDTH      # 856
+SCREEN_HEIGHT = HEIGHT + 80     # 720
+
+# 色関連
 GREEN = (0, 150, 0)
 BLACK = (0, 0, 0)
 WHITE = (240, 240, 240)
 GRAY = (80, 80, 80)
 FONT_COLOR = (255, 255, 0)
-#追加文字色定義
 DIALOGUE_FONT_COLOR = (0, 0, 0)
 
+# ゲームロジック関連
 EMPTY = 0
 PLAYER_BLACK = 1
 PLAYER_WHITE = 2  # CPU
-
 # --- サウンド初期化＆読み込み（スライド準拠） ---
 pygame.mixer.init()
 BGM_PATH = "クリームパンに見えるなぁ.mp3"
@@ -575,7 +580,109 @@ class Game:
         hint_rect = hint_surf.get_rect(centery=ui_bar_rect.centery + 20, right=WIDTH - 20)
         screen.blit(hint_surf, hint_rect)
 
+# ==============================
+# タイトル画面のコード (★ここから下が修正箇所です★)
+# ==============================
+TITLE_WHITE = (255, 255, 255)
+TITLE_SHADOW = (40, 40, 40)
+TITLE_BLUE = (150, 180, 255)
+BG_DARK_GREEN = (0, 50, 0)
+BG_BLACK = (0, 0, 0)
 
-if __name__ == "__main__":
+class TitleScreen:
+    """タイトル画面を管理するクラス"""
+    def __init__(self, screen: pygame.Surface):
+        self.screen = screen
+        try:
+            self.font = pygame.font.SysFont("MSGothic", 80)
+            self.small_font = pygame.font.SysFont("MSGothic", 40)
+        except:
+            self.font = pygame.font.Font(None, 80)
+            self.small_font = pygame.font.Font(None, 40)
+
+        try:
+            othello_orig = pygame.image.load("fig/image3.png").convert_alpha()
+            self.othello_image = pygame.transform.scale(othello_orig, (450, 292))
+            self.othello_rect = self.othello_image.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20))
+
+            duck_orig = pygame.image.load("fig/image5.png").convert_alpha()
+            duck_scaled = pygame.transform.scale(duck_orig, (220, 220))
+            self.duck_left_image = duck_scaled
+            self.duck_left_rect = self.duck_left_image.get_rect(center=(SCREEN_WIDTH / 4 - 30, SCREEN_HEIGHT / 2 + 80))
+            self.duck_right_image = pygame.transform.flip(duck_scaled, True, False)
+            self.duck_right_rect = self.duck_right_image.get_rect(center=(SCREEN_WIDTH * 3 / 4 + 30, SCREEN_HEIGHT / 2 + 80))
+        except pygame.error as e:
+            print(f"画像の読み込みに失敗しました: {e}"); self.othello_image = None; self.duck_left_image = None; self.duck_right_image = None
+
+        title_str = "こうかとんオセロ"
+        self.title_shadow_text = self.font.render(title_str, True, TITLE_SHADOW)
+        self.title_shadow_rect = self.title_shadow_text.get_rect(center=(SCREEN_WIDTH / 2 + 4, -50 + 4))
+        self.title_text = self.font.render(title_str, True, TITLE_WHITE)
+        self.title_rect = self.title_text.get_rect(center=(SCREEN_WIDTH / 2, -50))
+        self.start_text = self.small_font.render("Press SPACE to Start", True, TITLE_BLUE)
+        self.start_rect = self.start_text.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT - 80))
+        
+        self.target_y = SCREEN_HEIGHT / 2 - 120
+        self.speed = 2; self.alpha = 0; self.alpha_speed = 3; self.blinking_in = True
+        self.animation_time = 0.0; self.running = True
+
+    def animate_title(self) -> None:
+        if self.title_rect.centery < self.target_y:
+            self.title_rect.centery += self.speed; self.title_shadow_rect.centery += self.speed
+        else:
+            self.title_rect.centery = self.target_y; self.title_shadow_rect.centery = self.target_y
+
+    def blink_start_message(self) -> None:
+        if self.title_rect.centery != self.target_y: return
+        if self.blinking_in:
+            self.alpha += self.alpha_speed
+            if self.alpha >= 255: self.alpha = 255; self.blinking_in = False
+        else:
+            self.alpha -= self.alpha_speed
+            if self.alpha <= 0: self.alpha = 0; self.blinking_in = True
+        self.start_text.set_alpha(self.alpha); self.screen.blit(self.start_text, self.start_rect)
+
+    def draw_background(self) -> None:
+        for y in range(SCREEN_HEIGHT):
+            ratio = y / SCREEN_HEIGHT
+            r = int(BG_DARK_GREEN[0] * (1-ratio) + BG_BLACK[0] * ratio)
+            g = int(BG_DARK_GREEN[1] * (1-ratio) + BG_BLACK[1] * ratio)
+            b = int(BG_DARK_GREEN[2] * (1-ratio) + BG_BLACK[2] * ratio)
+            pygame.draw.line(self.screen, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+
+    def draw(self) -> None:
+        self.draw_background(); self.animate_title(); self.animation_time += 0.05
+        if self.othello_image: self.screen.blit(self.othello_image, self.othello_rect)
+        y_offset = math.sin(self.animation_time) * 10
+        if self.duck_left_image: self.screen.blit(self.duck_left_image, (self.duck_left_rect.x, self.duck_left_rect.y + y_offset))
+        if self.duck_right_image: self.screen.blit(self.duck_right_image, (self.duck_right_rect.x, self.duck_right_rect.y + y_offset))
+        self.screen.blit(self.title_shadow_text, self.title_shadow_rect); self.screen.blit(self.title_text, self.title_rect)
+        self.blink_start_message()
+
+    def handle_event(self, event: pygame.event.Event) -> bool:
+        if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            print("ゲーム開始！"); self.running = False
+        return self.running
+
+def main() -> None:
+    """メイン関数"""
+    pygame.init()
+    # ### 変更点: 新しい定数を使用して画面を作成 ###
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption("こうかとんオセロ")
+
+    title_screen = TitleScreen(screen)
+    clock = pygame.time.Clock()
+
+    while title_screen.running:
+        for event in pygame.event.get():
+            title_screen.handle_event(event)
+        title_screen.draw()
+        pygame.display.flip()
+        clock.tick(60)
     game = Game()
     game.run()
+
+if __name__ == "__main__":
+    main()
