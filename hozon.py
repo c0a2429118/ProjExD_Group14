@@ -1,37 +1,35 @@
 import pygame
 import sys
-import time
 import random
 import os
-import math
+import time
+from typing import List, Tuple, Optional, Set, Dict
 
 # --- 作業ディレクトリをこのファイルの場所に ---
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # --- 定数 ---
-#ゲームボード関連
+#右側幅追加
 RIGHT_PANEL_WIDTH = 216
 WIDTH, HEIGHT = 640, 640
+#追加幅計算
 TOTAL_WIDTH = WIDTH + RIGHT_PANEL_WIDTH
 CELL_SIZE = WIDTH // 8
-
-# ### 変更点: ウィンドウサイズの定義をここに集約 ###
-SCREEN_WIDTH = TOTAL_WIDTH      # 856
-SCREEN_HEIGHT = HEIGHT + 80     # 720
-
-# 色関連
 GREEN = (0, 150, 0)
 BLACK = (0, 0, 0)
 WHITE = (240, 240, 240)
 GRAY = (80, 80, 80)
 FONT_COLOR = (255, 255, 0)
+#追加文字色定義
 DIALOGUE_FONT_COLOR = (0, 0, 0)
 
-# ゲームロジック関連
 EMPTY = 0
-PLAYER_BLACK = 1
-PLAYER_WHITE = 2  # CPU
+DIALOG_BG = (50, 50, 70)
+BUTTON_COLOR = (100, 100, 150)
+
+# プレイヤー定数
+PLAYER_BLACK = 1 # 人間
+PLAYER_WHITE = 2 # CPU
+
 # --- サウンド初期化＆読み込み（スライド準拠） ---
 pygame.mixer.init()
 BGM_PATH = "クリームパンに見えるなぁ.mp3"
@@ -56,12 +54,16 @@ except Exception as e:
 
 pygame.init()
 #　画面サイズ修正
+
 screen = pygame.display.set_mode((TOTAL_WIDTH, HEIGHT + 80))
 pygame.display.set_caption("オセロ (プレイヤー vs CPU)")
 
 try:
     # ### 修正点①: 文字サイズを小さく変更 ###
     font = pygame.font.SysFont("MSGothic", 28)
+    dialog_font = pygame.font.SysFont("MS Gothic", 32)
+except pygame.error:
+    dialog_font = pygame.font.Font(None, 32)
 except Exception:
     font = pygame.font.Font(None, 28) # こちらも合わせて小さく
 
@@ -124,17 +126,22 @@ class Timer:
         if not self.game_over:
             self.elapsed_time = (pygame.time.get_ticks() - self.start_ticks) // 1000
         
-        
 
-# --- Othello盤のロジックを管理するクラス ---
+
+
+         
+# --- Board クラス (ゲームロジック) ---
 class Board:
+    
     def __init__(self):
-        self.grid = [[EMPTY] * 8 for _ in range(8)]
-        self.grid[3][3] = PLAYER_WHITE
-        self.grid[4][4] = PLAYER_WHITE
-        self.grid[3][4] = PLAYER_BLACK
-        self.grid[4][3] = PLAYER_BLACK
+        self.grid = [[0] * 8 for _ in range(8)]
+        self.grid[3][3] = PLAYER_WHITE; self.grid[4][4] = PLAYER_WHITE
+        self.grid[3][4] = PLAYER_BLACK; self.grid[4][3] = PLAYER_BLACK
+        
+        self.fixed_stones = set()
+        self.fix_charges = {PLAYER_BLACK: 2, PLAYER_WHITE: 2}
 
+    #test
     def is_valid_move(self, x, y, player):
         if not (0 <= x < 8 and 0 <= y < 8) or self.grid[y][x] != EMPTY:
             return False
@@ -155,9 +162,32 @@ class Board:
                         return True
         return False
 
+    def opponent(self, player):
+        return PLAYER_WHITE if player == PLAYER_BLACK else PLAYER_BLACK
+
+    def can_place(self, x, y, player):
+        if self.grid[y][x] != 0:
+            return False
+        
+        for dx, dy in [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < 8 and 0 <= ny < 8 and self.grid[ny][nx] == self.opponent(player):
+                while 0 <= nx < 8 and 0 <= ny < 8:
+                    nx += dx
+                    ny += dy
+                    if not (0 <= nx < 8 and 0 <= ny < 8) or self.grid[ny][nx] == EMPTY:
+                        break
+                    if self.grid[ny][nx] == player:
+                        return True
+        return False
+
     def get_valid_moves(self, player):
-        return [(x, y) for y in range(8) for x in range(8)
-                if self.is_valid_move(x, y, player)]
+        valid_moves = []
+        for y in range(8):
+            for x in range(8):
+                if self.is_valid_move(x, y, player):
+                    valid_moves.append((x, y))
+        return valid_moves
 
     def get_valid_moves_positions(self, player):
         """
@@ -185,7 +215,8 @@ class Board:
                        (1, -1), (1, 0), (1, 1)]:
             nx, ny = x + dx, y + dy
             stones_to_flip = []
-            while (0 <= nx < 8 and 0 <= ny < 8) and self.grid[ny][nx] == opponent:
+            nx, ny = x + dx, y + dy
+            while 0 <= nx < 8 and 0 <= ny < 8 and self.grid[ny][nx] == self.opponent(player):
                 stones_to_flip.append((nx, ny))
                 nx += dx
                 ny += dy
@@ -213,6 +244,7 @@ class Board:
         )
 
 
+# --- Game クラス (UIとゲーム進行) ---
 class Game:
     """
     オセロゲーム全体の進行と描画、およびセリフ表示を管理するクラス。
@@ -322,6 +354,13 @@ class Game:
             surface.blit(line_surf, line_rect)
             y += font_obj.get_linesize()
         self.show_legal_moves = True
+        self.state = "playing"
+        self.pending_move = None
+        # CPUが固定を狙う戦略的なマス
+        self.strategic_squares = {
+            (0,0), (0,7), (7,0), (7,7), # 角
+            (1,1), (1,6), (6,1), (6,6)  # 角の隣
+        }
 
     def run(self):
         clock = pygame.time.Clock()
@@ -414,6 +453,12 @@ class Game:
                         self.time.update(self.game_over)
 
             if self.current_player == PLAYER_WHITE and not self.game_over:
+                if not self.game_over:
+                    self.handle_event(event)
+            
+            if self.current_player == PLAYER_WHITE and not self.game_over and self.state == "playing":
+                self.draw()
+                pygame.display.flip()
                 pygame.time.wait(500)
                 self.ai_move()
                 self.check_game_flow()
@@ -430,7 +475,7 @@ class Game:
         best_move, max_flips = None, -1
         for move in valid_moves:
             temp_board = [row[:] for row in self.board.grid]
-            flips = 0
+            flips = self.count_flips_for_move(move[0], move[1], PLAYER_WHITE)
             for dx, dy in [(-1, -1), (-1, 0), (-1, 1),
                            (0, -1), (0, 1),
                            (1, -1), (1, 0), (1, 1)]:
@@ -449,7 +494,6 @@ class Game:
         if best_move:
             self.board.place_stone(best_move[0], best_move[1], PLAYER_WHITE)
         self.current_player = PLAYER_BLACK
-        self.message = "あなたの番です (黒)"
 
     def check_game_flow(self):
         if not self.board.get_valid_moves(self.current_player):
@@ -490,6 +534,18 @@ class Game:
         pygame.quit() 
         sys.exit()
     
+    def count_flips_for_move(self, x, y, player):
+        flips = 0
+        for dx, dy in [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]:
+            stones_to_flip = []
+            nx, ny = x + dx, y + dy
+            while 0 <= nx < 8 and 0 <= ny < 8 and self.board.grid[ny][nx] == self.board.opponent(player):
+                stones_to_flip.append((nx, ny))
+                nx += dx; ny += dy
+            if 0 <= nx < 8 and 0 <= ny < 8 and self.board.grid[ny][nx] == player:
+                flips += len(stones_to_flip)
+        return flips
+
     def draw(self):
         screen.fill(GREEN)
         for i in range(9):
@@ -497,7 +553,7 @@ class Game:
             pygame.draw.line(screen, BLACK, (0,i*CELL_SIZE), (WIDTH,i*CELL_SIZE), 2)
         for y in range(8):
             for x in range(8):
-                if self.board.grid[y][x] != EMPTY:
+                if self.board.grid[y][x] != 0:
                     color = BLACK if self.board.grid[y][x] == PLAYER_BLACK else WHITE
                     pygame.draw.circle(
                         screen, color,
@@ -556,10 +612,25 @@ class Game:
         message_rect = message_surf.get_rect(centery=ui_bar_rect.centery, left=20)
         screen.blit(message_surf, message_rect)
 
+        center = (x*CELL_SIZE+CELL_SIZE//2, y*CELL_SIZE+CELL_SIZE//2)
+        pygame.draw.circle(screen, color, center, CELL_SIZE//2-4)
+        if (x,y) in self.board.fixed_stones:
+            pygame.draw.circle(screen, FONT_COLOR, center, 8)
+        
+        ui_rect = pygame.Rect(0, HEIGHT, WIDTH, 80)
+        pygame.draw.rect(screen, GRAY, ui_rect)
+        
+        msg_surf = font.render(self.message, True, FONT_COLOR)
+        screen.blit(msg_surf, (20, HEIGHT + 10))
+        
+        fix_info = f"固定権: あなた {self.board.fix_charges[PLAYER_BLACK]} | CPU {self.board.fix_charges[PLAYER_WHITE]}"
+        fix_surf = font.render(fix_info, True, FONT_COLOR)
+        screen.blit(fix_surf, (20, HEIGHT + 45))
+        
         b, w = self.board.count_stones()
-        score_text = f"黒(あなた):{b}  白(CPU):{w}"
+        score_text = f"あなた(黒):{b} CPU(白):{w}"
         score_surf = font.render(score_text, True, FONT_COLOR)
-        score_rect = score_surf.get_rect(centery=ui_bar_rect.centery, right=WIDTH - 20)
+        score_rect = score_surf.get_rect(centery=ui_rect.centery, right=WIDTH-20)
         screen.blit(score_surf, score_rect)
         
         timer_x_pos = WIDTH // 2
@@ -580,109 +651,75 @@ class Game:
         hint_rect = hint_surf.get_rect(centery=ui_bar_rect.centery + 20, right=WIDTH - 20)
         screen.blit(hint_surf, hint_rect)
 
-# ==============================
-# タイトル画面のコード (★ここから下が修正箇所です★)
-# ==============================
-TITLE_WHITE = (255, 255, 255)
-TITLE_SHADOW = (40, 40, 40)
-TITLE_BLUE = (150, 180, 255)
-BG_DARK_GREEN = (0, 50, 0)
-BG_BLACK = (0, 0, 0)
+        if self.state == "awaiting_fix_choice":
+            self.draw_choice_dialog()
 
-class TitleScreen:
-    """タイトル画面を管理するクラス"""
-    def __init__(self, screen: pygame.Surface):
-        self.screen = screen
-        try:
-            self.font = pygame.font.SysFont("MSGothic", 80)
-            self.small_font = pygame.font.SysFont("MSGothic", 40)
-        except:
-            self.font = pygame.font.Font(None, 80)
-            self.small_font = pygame.font.Font(None, 40)
+    def draw_choice_dialog(self):
+        s = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA); s.fill((0,0,0,128)); screen.blit(s,(0,0))
+        self.dialog_rect = pygame.Rect(WIDTH//2-200, HEIGHT//2-100, 400, 200)
+        pygame.draw.rect(screen, DIALOG_BG, self.dialog_rect, border_radius=15)
+        q_text = dialog_font.render("この石を固定しますか？", True, WHITE)
+        screen.blit(q_text, (self.dialog_rect.centerx - q_text.get_width()//2, self.dialog_rect.y + 30))
+        self.yes_button = pygame.Rect(self.dialog_rect.x+50, self.dialog_rect.y+110, 120, 50)
+        self.no_button = pygame.Rect(self.dialog_rect.x+230, self.dialog_rect.y+110, 150, 50)
+        pygame.draw.rect(screen, BUTTON_COLOR, self.yes_button, border_radius=10)
+        pygame.draw.rect(screen, BUTTON_COLOR, self.no_button, border_radius=10)
+        yes_text = dialog_font.render("はい(Y)", True, WHITE)
+        no_text = dialog_font.render("いいえ(N)", True, WHITE)
+        screen.blit(yes_text, (self.yes_button.centerx-yes_text.get_width()//2, self.yes_button.centery-yes_text.get_height()//2))
+        screen.blit(no_text, (self.no_button.centerx-no_text.get_width()//2, self.no_button.centery-no_text.get_height()//2))
 
-        try:
-            othello_orig = pygame.image.load("fig/image3.png").convert_alpha()
-            self.othello_image = pygame.transform.scale(othello_orig, (450, 292))
-            self.othello_rect = self.othello_image.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 20))
+    def process_player_choice(self, fix_it):
+        x, y = self.pending_move
+        self.board.place_stone(x, y, PLAYER_BLACK, fix_this_stone=fix_it)
+        self.state = "playing"
+        self.pending_move = None
+        self.current_player = PLAYER_WHITE
+        self.check_game_flow()
 
-            duck_orig = pygame.image.load("fig/image5.png").convert_alpha()
-            duck_scaled = pygame.transform.scale(duck_orig, (220, 220))
-            self.duck_left_image = duck_scaled
-            self.duck_left_rect = self.duck_left_image.get_rect(center=(SCREEN_WIDTH / 4 - 30, SCREEN_HEIGHT / 2 + 80))
-            self.duck_right_image = pygame.transform.flip(duck_scaled, True, False)
-            self.duck_right_rect = self.duck_right_image.get_rect(center=(SCREEN_WIDTH * 3 / 4 + 30, SCREEN_HEIGHT / 2 + 80))
-        except pygame.error as e:
-            print(f"画像の読み込みに失敗しました: {e}"); self.othello_image = None; self.duck_left_image = None; self.duck_right_image = None
+    def handle_event(self, event):
+        if self.current_player == PLAYER_BLACK:
+            if self.state == "playing":
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    x, y = event.pos[0] // CELL_SIZE, event.pos[1] // CELL_SIZE
+                    if self.board.can_place(x, y, PLAYER_BLACK):
+                        if self.board.fix_charges[PLAYER_BLACK] > 0:
+                            self.state = "awaiting_fix_choice"
+                            self.pending_move = (x, y)
+                        else:
+                            self.board.place_stone(x, y, PLAYER_BLACK, False)
+                            self.current_player = PLAYER_WHITE
+                            self.check_game_flow()
 
-        title_str = "こうかとんオセロ"
-        self.title_shadow_text = self.font.render(title_str, True, TITLE_SHADOW)
-        self.title_shadow_rect = self.title_shadow_text.get_rect(center=(SCREEN_WIDTH / 2 + 4, -50 + 4))
-        self.title_text = self.font.render(title_str, True, TITLE_WHITE)
-        self.title_rect = self.title_text.get_rect(center=(SCREEN_WIDTH / 2, -50))
-        self.start_text = self.small_font.render("Press SPACE to Start", True, TITLE_BLUE)
-        self.start_rect = self.start_text.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT - 80))
-        
-        self.target_y = SCREEN_HEIGHT / 2 - 120
-        self.speed = 2; self.alpha = 0; self.alpha_speed = 3; self.blinking_in = True
-        self.animation_time = 0.0; self.running = True
+            elif self.state == "awaiting_fix_choice":
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if self.yes_button.collidepoint(event.pos): self.process_player_choice(True)
+                    elif self.no_button.collidepoint(event.pos): self.process_player_choice(False)
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_y: self.process_player_choice(True)
+                    elif event.key == pygame.K_n: self.process_player_choice(False)
 
-    def animate_title(self) -> None:
-        if self.title_rect.centery < self.target_y:
-            self.title_rect.centery += self.speed; self.title_shadow_rect.centery += self.speed
-        else:
-            self.title_rect.centery = self.target_y; self.title_shadow_rect.centery = self.target_y
+    def check_game_flow(self):
+        self.update_message()
+        if not self.board.get_valid_moves(self.current_player):
+            opponent = self.board.opponent(self.current_player)
+            if not self.board.get_valid_moves(opponent):
+                self.game_over = True; self.end_game()
+            else:
+                self.message = f"{'あなた' if self.current_player == PLAYER_BLACK else 'CPU'}はパス"
+                self.draw(); pygame.display.flip(); pygame.time.wait(1000)
+                self.current_player = opponent
+                self.update_message()
 
-    def blink_start_message(self) -> None:
-        if self.title_rect.centery != self.target_y: return
-        if self.blinking_in:
-            self.alpha += self.alpha_speed
-            if self.alpha >= 255: self.alpha = 255; self.blinking_in = False
-        else:
-            self.alpha -= self.alpha_speed
-            if self.alpha <= 0: self.alpha = 0; self.blinking_in = True
-        self.start_text.set_alpha(self.alpha); self.screen.blit(self.start_text, self.start_rect)
+    def update_message(self):
+        if not self.game_over:
+            self.message = "あなたの番です (黒)" if self.current_player == PLAYER_BLACK else "CPUの番です (白)"
 
-    def draw_background(self) -> None:
-        for y in range(SCREEN_HEIGHT):
-            ratio = y / SCREEN_HEIGHT
-            r = int(BG_DARK_GREEN[0] * (1-ratio) + BG_BLACK[0] * ratio)
-            g = int(BG_DARK_GREEN[1] * (1-ratio) + BG_BLACK[1] * ratio)
-            b = int(BG_DARK_GREEN[2] * (1-ratio) + BG_BLACK[2] * ratio)
-            pygame.draw.line(self.screen, (r, g, b), (0, y), (SCREEN_WIDTH, y))
-
-    def draw(self) -> None:
-        self.draw_background(); self.animate_title(); self.animation_time += 0.05
-        if self.othello_image: self.screen.blit(self.othello_image, self.othello_rect)
-        y_offset = math.sin(self.animation_time) * 10
-        if self.duck_left_image: self.screen.blit(self.duck_left_image, (self.duck_left_rect.x, self.duck_left_rect.y + y_offset))
-        if self.duck_right_image: self.screen.blit(self.duck_right_image, (self.duck_right_rect.x, self.duck_right_rect.y + y_offset))
-        self.screen.blit(self.title_shadow_text, self.title_shadow_rect); self.screen.blit(self.title_text, self.title_rect)
-        self.blink_start_message()
-
-    def handle_event(self, event: pygame.event.Event) -> bool:
-        if event.type == pygame.QUIT: pygame.quit(); sys.exit()
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-            print("ゲーム開始！"); self.running = False
-        return self.running
-
-def main() -> None:
-    """メイン関数"""
-    pygame.init()
-    # ### 変更点: 新しい定数を使用して画面を作成 ####
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("こうかとんオセロ")
-
-    title_screen = TitleScreen(screen)
-    clock = pygame.time.Clock()
-
-    while title_screen.running:
-        for event in pygame.event.get():
-            title_screen.handle_event(event)
-        title_screen.draw()
-        pygame.display.flip()
-        clock.tick(60)
-    game = Game()
-    game.run()
+    def end_game(self):
+        b, w = self.board.count_stones()
+        winner = "あなたの勝ち" if b > w else "CPUの勝ち" if w > b else "引き分け"
+        self.message = f"ゲーム終了！ {winner} ({b}-{w})"
 
 if __name__ == "__main__":
-    main()
+    game = Game()
+    game.run()
