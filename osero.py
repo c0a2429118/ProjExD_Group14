@@ -668,7 +668,7 @@ class TitleScreen:
 def main() -> None:
     """メイン関数"""
     pygame.init()
-    # ### 変更点: 新しい定数を使用して画面を作成 ###
+    # ### 変更点: 新しい定数を使用して画面を作成 ####
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("こうかとんオセロ")
 
